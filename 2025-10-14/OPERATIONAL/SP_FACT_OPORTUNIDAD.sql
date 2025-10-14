@@ -1,10 +1,10 @@
 CREATE PROCEDURE `amrl-data-prd`.OPERATIONAL.SP_FACT_OPORTUNIDAD()
 OPTIONS(
-  description="Propósito: Crear y actualizar la tabla FACT_OPORTUNIDADES, consolidando todos los atributos que se encuentran en la pestaña resumen de la oportunidad de Oracle Fusion. La tabla muestra el total de oportunidades, la etapa en la que se encuentra la venta y el ID de los articulos asociados a la oporunidad (bk_articulo).\nAutor: Maria Fernanda Franco\nUsos: Tablero de Indicadores, TrackingTools\nModificaciones: 2025-02-07: Se incluye la columna FECHA_SEPARACION_AJUSTADA\nModificaciones: 2025-03-28: Se incluye CASE para la columna BK_PERSONA antes solo se llamaba el campo PRCONPARTYID\nModificaciones: 2025-04-11: Se incluye LEFT JOIN con la tabla RAW.FUSION_ZCA_SALES_ORDER_HEADERS \nModificaciones: 2025-05-14: Se incluye la condición ORDERTOTAL > 0 para la subtabla ZSOH\nModificaciones: 2025-07-01: Se retira DISTINCT de la linea 6\nModificaciones: 2025-07-29: Se incluye la subconsulta T1 para incluir los porcentajes de participación en la compra\nModificaciones: 2025-10-03: Se incluye la subconsulta T2 para añadir campo Grupo de gestores")
+  description="Propósito: Crear y actualizar la tabla FACT_OPORTUNIDADES, consolidando todos los atributos que se encuentran en la pestaña resumen de la oportunidad de Oracle Fusion. La tabla muestra el total de oportunidades, la etapa en la que se encuentra la venta y el ID de los articulos asociados a la oporunidad (bk_articulo).\nAutor: Maria Fernanda Franco\nUsos: Tablero de Indicadores, TrackingTools\nModificaciones: 2025-02-07: Se incluye la columna FECHA_SEPARACION_AJUSTADA\nModificaciones: 2025-03-28: Se incluye CASE para la columna BK_PERSONA antes solo se llamaba el campo PRCONPARTYID\nModificaciones: 2025-04-11: Se incluye LEFT JOIN con la tabla RAW.FUSION_ZCA_SALES_ORDER_HEADERS \nModificaciones: 2025-05-14: Se incluye la condición ORDERTOTAL > 0 para la subtabla ZSOH\nModificaciones: 2025-07-01: Se retira DISTINCT de la linea 6\nModificaciones: 2025-07-29: Se incluye la subconsulta T1 para incluir los porcentajes de participación en la compra\nModificaciones: 2025-10-03: Se incluye la subconsulta T2 para añadir campo Grupo de Asesores\nModificaciones: 2025-10-14: Se modifica la subconsulta T2 para incluir los atributos relacionados al campo Grupo Responsable Asesor, ")
 BEGIN
   CREATE OR REPLACE TABLE `amrl-data-prd.PRESENTATION.FACT_OPORTUNIDAD` AS
 
-            SELECT MO.OPTYID                                                                    AS SK_OP
+SELECT MO.OPTYID                                                                    AS SK_OP
                   ,MO.OPTYNUMBER                                                                AS BK_NUMERO_OP       
                   ,MO.NAME                                                                      AS NOMBRE_OP
                   ,MO.SALESMETHODID                                                             AS METODO_DE_VENTAS
@@ -68,7 +68,16 @@ BEGIN
                   ,MO.EXTNATTRIBUTECHAR118                                                      AS ID_TRABAJO_DESISTIMIENTO
                   ,MO.EXTNATTRIBUTECHAR116                                                      AS RECIBO_GENERADO_DESISTIMIENTO
                   ,MO.EXTNATTRIBUTECHAR119                                                      AS INFORMACION_PROCESO_DESISTIMIENTO
-                  ,T2.RECORD_NAME                                                               AS GRUPO_RESPONSABLE_ASESOR
+                  ,T2.GRUPO_RESPONSABLE_ASESOR 
+                  ,T2.TIPO_DOCUMENTO_GRUPO_ASESOR
+                  ,T2.NUMERO_IDENTIFICACION_GRUPO_ASESOR
+                  ,T2.NOMBRES_GRUPO_ASESOR
+                  ,T2.APELLIDOS_GRUPO_ASESOR
+                  ,T2.TELEFONO_GRUPO_ASESOR
+                  ,T2.CORREO_GRUPO_ASESOR
+                  ,T2.GRUPO_ASESOR_ACTUALIZADO_POR
+                  ,T2.FECHA_ULTIMA_ACTUALIZACION_GRUPO_ASESOR
+                  ,T2.PROPIETARIO_GRUPO_ASESOR
                   ,EIEB.EFF_LINE_ID                                                             AS BK_ARTICULO                  
                   ,CASE --BK_PERSONA
                         WHEN PRCONPARTYID IS NULL THEN CUSTPARTYID
@@ -152,9 +161,29 @@ BEGIN
                         GROUP BY OPTYID
                   ) AS T1 ON T1.OPTYID = MO.OPTYID
             LEFT JOIN (-- Incluye campo Grupo Responsable Asesor del resumen de la OP V1.0.1 AM 03102025
+                       --Incluye atributos asociados al campo Grupo Responsable Asesor V1.0.2 AM 14102025
                         SELECT 
                         A.OPTYID,
-                        B.RECORD_NAME
+                        B.RECORD_NAME AS GRUPO_RESPONSABLE_ASESOR,
+                        CASE
+                        WHEN B.EXTN_ATTRIBUTE_CHAR012 = '11' THEN 'Registro Civil de Nacimiento'
+                        WHEN B.EXTN_ATTRIBUTE_CHAR012 = '12' THEN 'Tarjeta de Identidad'
+                        WHEN B.EXTN_ATTRIBUTE_CHAR012 = '13' THEN 'Cédula de Ciudadanía'
+                        WHEN B.EXTN_ATTRIBUTE_CHAR012 = '21' THEN 'Tarjeta de Extranjería'
+                        WHEN B.EXTN_ATTRIBUTE_CHAR012 = '22' THEN 'Cédula de Extranjeria'
+                        WHEN B.EXTN_ATTRIBUTE_CHAR012 = '31' THEN 'NIT'
+                        WHEN B.EXTN_ATTRIBUTE_CHAR012 = '41' THEN 'Pasaporte'
+                        END AS TIPO_DOCUMENTO_GRUPO_ASESOR,
+                        EXTN_ATTRIBUTE_CHAR010 AS NUMERO_IDENTIFICACION_GRUPO_ASESOR,
+                        EXTN_ATTRIBUTE_CHAR009 AS NOMBRES_GRUPO_ASESOR,
+                        EXTN_ATTRIBUTE_CHAR007 AS APELLIDOS_GRUPO_ASESOR,
+                        EXTN_ATTRIBUTE_CHAR011 AS TELEFONO_GRUPO_ASESOR,
+                        EXTN_ATTRIBUTE_CHAR008 AS CORREO_GRUPO_ASESOR,
+                        LAST_UPDATED_BY AS GRUPO_ASESOR_ACTUALIZADO_POR,
+                        LAST_UPDATE_DATE AS FECHA_ULTIMA_ACTUALIZACION_GRUPO_ASESOR,
+                        CASE  WHEN OWNER_RESOURCE_ID  = '300000333273997' THEN 'SOPORTE TICS'
+                              ELSE OWNER_RESOURCE_ID END
+                              AS PROPIETARIO_GRUPO_ASESOR
                         FROM `RAW.FUSION_MOO_OPTY` AS A
                         LEFT JOIN `RAW.FUSION_HZ_REF_ENTITIES` B ON A.EXTNATTRIBUTENUMBER003 = B.ID
             ) AS T2 ON T2.OPTYID = MO.OPTYID

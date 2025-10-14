@@ -1,8 +1,14 @@
 CREATE PROCEDURE `amrl-data-prd`.OPERATIONAL.SP_OBT_FACT_OPORTUNIDAD()
 OPTIONS(
-  description="Propósito: Crear y actualizar la tabla OBT_FACT_OPORTUNIDADES en el DataSet de COMSUPTION, La tabla muestra el detalle de los artículos incluidos en cada oportunidad y permite filtros por subetapa y macroproyecto; consolida todos los atributos que se encuentran en la DIM_MACROPROYECTO, DIM_SUBETAPA, FACT_OPORTUNIDAD, DIM_INVENTARIO.  \nAutor: Maria Fernanda Franco\nUsos: Tablero de Indicadores, TrackingTools\nModificaciones: \n2025-02-07: Se incluye la columna FECHA_SEPARACION_AJUSTADA\n2025-02-26: Se excluye del WHERE la condicion DESISTIDO = 'N' para lograr contar la instantanea mensual de las ventas sin importar los desistimientos\n2025-04-04: Se incluye un subquery para la conexión con la tabla DIM_INVENTARIO con el objetivo de evitar la duplicidad de artículos por la columna BK_PRECIO en cada actualización del sistema \n2025-10-03: Se incluye campo Grupo de gestores")
+  description="Propósito: Crear y actualizar la tabla OBT_FACT_OPORTUNIDADES en el DataSet de COMSUPTION, La tabla muestra el detalle de los artículos incluidos en cada oportunidad y permite filtros por subetapa y macroproyecto; consolida todos los atributos que se encuentran en la DIM_MACROPROYECTO, DIM_SUBETAPA, FACT_OPORTUNIDAD, DIM_INVENTARIO.  \nAutor: Maria Fernanda Franco\nUsos: Tablero de Indicadores, TrackingTools\nModificaciones: \n2025-02-07: Se incluye la columna FECHA_SEPARACION_AJUSTADA\n2025-02-26: Se excluye del WHERE la condicion DESISTIDO = 'N' para lograr contar la instantanea mensual de las ventas sin importar los desistimientos\n2025-04-04: Se incluye un subquery para la conexión con la tabla DIM_INVENTARIO con el objetivo de evitar la duplicidad de artículos por la columna BK_PRECIO en cada actualización del sistema \n2025-10-03: Se incluye campo Grupo de gestoresnModificaciones: 2025-10-14: Se incuyen los atributos relacionados al campo Grupo Responsable Asesor")
 BEGIN
-    CREATE OR REPLACE TABLE `amrl-data-prd.CONSUMPTION.OBT_FACT_OPORTUNIDAD` PARTITION BY FECHA_DE_SEPARACION CLUSTER BY SALA_DE_VENTAS, MACROPROYECTO ,MACROCONSOLIDADOR, TRANSACCIONAL AS
+    CREATE OR REPLACE TABLE `amrl-data-prd.CONSUMPTION.OBT_FACT_OPORTUNIDAD` PARTITION BY FECHA_DE_SEPARACION CLUSTER BY SALA_DE_VENTAS, MACROPROYECTO ,MACROCONSOLIDADOR, TRANSACCIONAL
+ OPTIONS (
+            description = ''' colocas aca DESCRIPCION DEL MODELO ''',
+            labels = [('tipo', 'modelo_datos'),('estado', 'en_estabilización')]
+)   
+    
+AS
 
 SELECT 
         ROW_NUMBER() OVER (ORDER BY fo.BK_NUMERO_OP) AS SK_OBT_FACT_OPORTUNIDAD
@@ -117,6 +123,15 @@ SELECT
         ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN UPPER(dpc2.OCUPACION) ELSE NULL            END OCUPACION_COMPRADOR2
         ,fo.BK_ARTICULO
         ,fo.GRUPO_RESPONSABLE_ASESOR
+        ,fo.TIPO_DOCUMENTO_GRUPO_ASESOR
+        ,fo.NUMERO_IDENTIFICACION_GRUPO_ASESOR
+        ,fo.NOMBRES_GRUPO_ASESOR
+        ,fo.APELLIDOS_GRUPO_ASESOR
+        ,fo.TELEFONO_GRUPO_ASESOR
+        ,fo.CORREO_GRUPO_ASESOR
+        ,fo.GRUPO_ASESOR_ACTUALIZADO_POR
+        ,fo.FECHA_ULTIMA_ACTUALIZACION_GRUPO_ASESOR
+        ,fo.PROPIETARIO_GRUPO_ASESOR
         ,din.NOMBRE_ARTICULO
         ,din.CATEGORIA
         ,din.REFERENCIA
