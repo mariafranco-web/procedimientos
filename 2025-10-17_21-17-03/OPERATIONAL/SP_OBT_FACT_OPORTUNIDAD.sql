@@ -1,0 +1,168 @@
+CREATE PROCEDURE `amrl-data-prd`.OPERATIONAL.SP_OBT_FACT_OPORTUNIDAD()
+OPTIONS(
+  description="Propósito: Crear y actualizar la tabla OBT_FACT_OPORTUNIDADES en el DataSet de COMSUPTION, La tabla muestra el detalle de los artículos incluidos en cada oportunidad y permite filtros por subetapa y macroproyecto; consolida todos los atributos que se encuentran en la DIM_MACROPROYECTO, DIM_SUBETAPA, FACT_OPORTUNIDAD, DIM_INVENTARIO.  \nAutor: Maria Fernanda Franco\nUsos: Tablero de Indicadores, TrackingTools\nModificaciones: \n2025-02-07: Se incluye la columna FECHA_SEPARACION_AJUSTADA\n2025-02-26: Se excluye del WHERE la condicion DESISTIDO = 'N' para lograr contar la instantanea mensual de las ventas sin importar los desistimientos\n2025-04-04: Se incluye un subquery para la conexión con la tabla DIM_INVENTARIO con el objetivo de evitar la duplicidad de artículos por la columna BK_PRECIO en cada actualización del sistema \n2025-10-03: Se incluye campo Grupo de gestoresnModificaciones: 2025-10-14: Se incuyen los atributos relacionados al campo Grupo Responsable Asesor\n2025-10-16_MF: se incluye columna TIPO_IDENTIFICACION_COMPRADOR1 y TIPO_IDENTIFICACION_COMPRADOR2\n2025-10-16_MF: se incluye campo ASESOR_RESPONSABLE_DEL_DESISTIMIENTO")
+BEGIN
+CREATE OR REPLACE TABLE `amrl-data-prd.CONSUMPTION.OBT_FACT_OPORTUNIDAD` PARTITION BY FECHA_DE_SEPARACION CLUSTER BY SALA_DE_VENTAS, MACROPROYECTO ,MACROCONSOLIDADOR, TRANSACCIONAL
+ 
+OPTIONS ( description = ''' Consolida información de la pestaña resumen, de cada oportunidad en Oracle más todos los cumplimientos, datos de contactos de los compradores, atributos basicos de los articulos y del proyecto ''',labels = [('tipo', 'modelo_datos'),('estado', 'en_estabilización')]) AS
+
+    SELECT ROW_NUMBER() OVER (ORDER BY fo.BK_NUMERO_OP) AS SK_OBT_FACT_OPORTUNIDAD
+          ,dse.BK_COD_MACROPROYECTO
+          ,dmp.MACROPROYECTO
+          ,dmc.SK_COD_MACROCONSOLIDADOR
+          ,dmc.MACROCONSOLIDADOR
+          ,dse.SK_COD_TRANSACCIONAL 
+          ,dse.TRANSACCIONAL
+          ,dse.SALA_DE_VENTAS
+          ,dse.SALA_DE_VENTAS_ALTERNATIVA
+          ,dse.TIPO_DE_PROYECTO
+          ,dse.ESTADO_PROYECTO
+          ,dse.ESTADO_FINANCIERO_PROYECTO
+          ,dse.CIUDAD 
+          ,UPPER(dse.DIRECCION_PROYECTO) AS DIRECCION_PROYECTO
+          ,dse.BANCO_CONSTRUCTOR
+          ,dse.ENTIDAD_FIDUCIARIA
+          ,dse.DIRECTOR_DE_VENTAS_VIVIENDAS_TRANSACCIONAL
+          ,dse.DIRECTOR_DE_VENTAS_COMERCIOS_TRANSACCIONAL
+          ,dse.FECHA_INICIO_VENTAS_TRANSACCIONAL
+          ,dse.FECHA_PUNTO_DE_EQUILIBRIO
+          ,dse.FECHA_PROYECTADA_RPH
+          ,dse.FECHA_REAL_RPH
+          ,fo.SK_OP
+            ,fo.BK_NUMERO_OP
+            ,fo.NOMBRE_OP
+            ,CASE
+                WHEN fo.METODO_DE_VENTAS = 300000007361831 THEN "Amarilo - Sala de Ventas"
+                WHEN fo.METODO_DE_VENTAS = 300000007361698 THEN "Amarilo - Centro de Acabados"
+                WHEN fo.METODO_DE_VENTAS = 300000007361864 THEN "Amarilo - Ventas empresariales"
+                ELSE ""
+            END METODO_DE_VENTAS
+            ,fo.ETAPA_DE_VENTA
+            ,COALESCE(fo.IMPORTE_TOTAL_OP,0) AS IMPORTE_TOTAL_OP -- No incluye CDA
+            ,COALESCE(fo.IMPORTE_TOTAL_OP_PRIMERA_VERSION,0) AS IMPORTE_TOTAL_OP_PRIMERA_VERSION
+            ,fo.INMUEBLE_PRINCIPAL       
+            ,fo.BK_VENDEDOR
+            ,dpv.NOMBRE_COMPLETO  AS NOMBRE_VENDEDOR
+            ,fo.OP_CREADA_POR
+            ,fo.FECHA_DE_CREACION_OP
+            ,fo.OP_ACTUALIZADA_POR
+            ,fo.FECHA_ULTIMA_ACTUALIZACION_OP
+            ,fo.ACEPTAR_VENTA
+            ,fo.TIPO_VENTA
+            ,fo.DESTINO
+            ,fo.REFERIDO
+            ,fo.OBSERVACIONES
+            ,fo.PORCENTAJE_COMPRADORES
+            ,fo.PORCENTAJE_COMPRADOR1
+            ,fo.FECHA_DE_SEPARACION
+            ,fo.FECHA_DE_SEPARACION_AJUSTADA 
+            ,fo.FECHA_COMPROMISO_RADICACION_CREDITO 
+            ,fo.FECHA_COMPROMISO_RADICACION_SUBSIDIO 
+            ,fo.INMUEBLE_OPCIONADO
+            ,fo.ENTIDAD_CREDITO
+            ,COALESCE(fo.MONTO_CREDITO,0) AS MONTO_CREDITO
+            ,fo.ENTIDAD_CREDITO_TER_1
+            ,COALESCE(fo.MONTO_CREDITO_TER_1,0) AS MONTO_CREDITO_TER_1
+            ,fo.ENTIDAD_CREDITO_TER_2
+            ,COALESCE(fo.MONTO_CREDITO_TER_2,0) AS MONTO_CREDITO_TER_2        
+            ,fo.ENTIDAD_SUBSIDIO_1
+            ,COALESCE(fo.MONTO_SUBSIDIO_1, 0) AS MONTO_SUBSIDIO_1
+            ,fo.ENTIDAD_SUBSIDIO_2
+            ,COALESCE(fo.MONTO_SUBSIDIO_2, 0) AS MONTO_SUBSIDIO_2
+            ,fo.PUNTO_DE_EQUILIBRIO
+            ,fo.BLOQUEO
+            ,fo.NUMERO_DE_ESCRITURA
+            ,fo.FECHA_DE_ESCRITURA        
+            ,fo.NOTARIA
+            ,fo.CIRCULO_NOTARIAL
+            ,fo.DESISTIDO	
+            ,fo.FECHA_DESISTIDO
+            ,fo.FECHA_DESISTIDO_AJUSTADA
+            ,fo.FECHA_RADICADO_DOCUMENTOS_DESISTIMIENTO
+            ,fo.ASESOR_RESPONSABLE_DEL_DESISTIMIENTO
+            ,fo.CAUSA_DESISTIMIENTO
+            ,fo.TIPO_DESISTIMIENTO
+            ,fo.ARRAS_SANCION_DESISTIMIENTO
+            ,fo.CHECK_ENVIAR_APROBACION_DESISTIMIENTO
+            ,fo.FECHA_ENVIO_APROBACION_DESISTIMIENTO
+            ,fo.CHECK_APROBACION_DIRECTOR
+            ,fo.FECHA_DESISTIMIENTO_DIRECTOR
+            ,fo.OBSERVACION_DESISTIMIENTO 	
+            ,fo.ID_TRABAJO_DESISTIMIENTO
+            ,fo.RECIBO_GENERADO_DESISTIMIENTO
+            ,fo.INFORMACION_PROCESO_DESISTIMIENTO
+            ,fo.BK_PERSONA
+            ,fo.BK_OP_CDA
+            ,UPPER(dpc.NOMBRE_COMPLETO) AS COMPRADOR1
+            ,dpc.TIPO_IDENTIFICACION  AS TIPO_IDENTIFICACION_COMPRADOR1
+            ,UPPER(dpc.NUMERO_DE_IDENTIFICACION) AS IDENTIFICACION_COMPRADOR1
+            ,dpc.FECHA_DE_NACIMIENTO AS FECHA_DE_NACIMIENTO_COMPRADOR1
+            ,UPPER(dpc.PAIS_DE_RESIDENCIA)  AS PAIS_COMPRADOR1
+            ,UPPER(dpc.CIUDAD_DE_RESIDENCIA) AS CIUDAD_COMPRADOR1
+            ,UPPER(dpc.DIRECCION_RESIDENCIA) AS DIRECCION_COMPRADOR1
+            ,UPPER(dpc.EMAIL) AS EMAIL_COMPRADOR1
+            ,dpc.TELEFONO AS TELEFONO_COMPRADOR1
+            ,dpc.GENERO AS GENERO_COMPRADOR1
+            ,dpc.ESTADO_CIVIL AS ESTADO_CIVIL_COMPRADOR1
+            ,UPPER(dpc.OCUPACION) AS OCUPACION_COMPRADOR1
+            -- Los CASE permiten diferenciar si hay un COMPRADOR #2 o es una persona de contacto referenciada en la OP
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN dpc.BK_COMPRADOR2 ELSE NULL                END BK_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN UPPER(dpc2.NOMBRE_COMPLETO) ELSE NULL      END COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN dpc2.TIPO_IDENTIFICACION ELSE NULL         END TIPO_IDENTIFICACION_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN dpc2.NUMERO_DE_IDENTIFICACION ELSE NULL    END IDENTIFICACION_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN dpc2.FECHA_DE_NACIMIENTO ELSE NULL         END FECHA_DE_NACIMIENTO_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN UPPER(dpc2.PAIS_DE_RESIDENCIA) ELSE NULL   END PAIS_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN UPPER(dpc2.CIUDAD_DE_RESIDENCIA) ELSE NULL END CIUDAD_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN UPPER(dpc2.DIRECCION_RESIDENCIA) ELSE NULL END DIRECCION_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN UPPER(dpc2.EMAIL) ELSE NULL                END EMAIL_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN dpc2.TELEFONO ELSE NULL                    END TELEFONO_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN dpc2.GENERO  ELSE NULL                     END GENERO_COMPRADOR2 
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN dpc2.ESTADO_CIVIL ELSE NULL                END ESTADO_CIVIL_COMPRADOR2
+            ,CASE WHEN fo.PORCENTAJE_COMPRADOR1 < 100 THEN UPPER(dpc2.OCUPACION) ELSE NULL            END OCUPACION_COMPRADOR2
+            ,fo.BK_ARTICULO
+            ,fo.GRUPO_RESPONSABLE_ASESOR
+            ,fo.TIPO_DOCUMENTO_GRUPO_ASESOR
+            ,fo.NUMERO_IDENTIFICACION_GRUPO_ASESOR
+            ,fo.NOMBRES_GRUPO_ASESOR
+            ,fo.APELLIDOS_GRUPO_ASESOR
+            ,fo.TELEFONO_GRUPO_ASESOR
+            ,fo.CORREO_GRUPO_ASESOR
+            ,fo.GRUPO_ASESOR_ACTUALIZADO_POR
+            ,fo.FECHA_ULTIMA_ACTUALIZACION_GRUPO_ASESOR
+            ,fo.PROPIETARIO_GRUPO_ASESOR
+            ,din.NOMBRE_ARTICULO
+            ,din.CATEGORIA
+            ,din.REFERENCIA
+            ,din.ESTADO_DEL_ARTICULO
+            ,din.CLASE_DE_ARTICULO
+            ,din.TIPO_DE_ARTICULO
+            ,din.PRECIO_UNITARIO
+            ,din.AREA_CONSTRUIDA    
+            ,din.AREA_COMUN 
+            ,din.MATRICULA_INMOBILIARIA
+            ,din.FECHA_PROYECTADA_ESCRITURACION
+            ,din.FECHA_PROYECTADA_CTO
+            ,din.FECHA_REAL_CTO        
+            ,din.FECHA_REAL_POLIZA_DECENAL
+            ,din.ENCARGO_FIDUCIARIO
+            ,vpdt.*
+            ,dt.*
+    FROM `PRESENTATION.FACT_OPORTUNIDAD` as fo
+    LEFT JOIN `PRESENTATION.DIM_TIEMPO` dt ON fo.FECHA_DE_SEPARACION = dt.FECHA
+    LEFT JOIN `PRESENTATION.DIM_SUB_ETAPA` dse ON fo.BK_COD_TRANSACCIONAL = dse.SK_COD_TRANSACCIONAL
+    LEFT JOIN `PRESENTATION.DIM_MACROCONSOLIDADOR` dmc ON dse.BK_COD_MACROCONSOLIDADOR = dmc.SK_COD_MACROCONSOLIDADOR 
+    LEFT JOIN `PRESENTATION.DIM_MACROPROYECTO` dmp ON dse.BK_COD_MACROPROYECTO = dmp.SK_COD_MACROPROYECTO
+    LEFT JOIN ( --Obtiene el articulo con precio mas actualizado, evitando que se presente duplicidad de articulo por precio.
+                SELECT *
+                  FROM `PRESENTATION.DIM_INMUEBLES`              
+                  QUALIFY ROW_NUMBER() OVER (
+                  PARTITION BY BK_OP, SK_ARTICULO 
+                  ORDER BY FECHA_ACTUALIZACION_PRECIO DESC
+                    ) = 1
+              ) din ON fo.SK_OP = din.BK_OP AND fo.BK_ARTICULO = din.SK_ARTICULO
+    LEFT JOIN  `PRESENTATION.DIM_PERSONA` dpv ON  fo.BK_VENDEDOR = dpv.BK_PERSONA 
+    LEFT JOIN  `PRESENTATION.DIM_PERSONA` dpc ON  fo.BK_PERSONA = dpc.BK_PERSONA --obtiene la informacion del comprador principal
+    LEFT JOIN  `PRESENTATION.DIM_PERSONA` dpc2 ON  dpc.BK_COMPRADOR2 = dpc2.BK_PERSONA --obtiene la informacion del comprador secundario
+    LEFT JOIN `PRESENTATION.VW_PIVOT_DimTramites` vpdt ON fo.SK_OP = vpdt.BK_OP--obtiene los cumplimientos
+    WHERE din.NOMBRE_ARTICULO IS NOT NULL; --exluye oportunidades desistidas  
+END;
